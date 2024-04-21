@@ -14,8 +14,12 @@ mp_drawing_styles = mp.solutions.drawing_styles
 
 hands = mp_hands.Hands(static_image_mode=True, min_detection_confidence=0.3)
 
-labels_dict = {0: 'A', 1: 'B', 2: 'C'}
+labels_dict = {0: '0', 1: '1', 2: '2',3:'3',4:'4',5:'5',6:'6',7:'7',8:'8',9:'9',10:'A',11:'B',12:'C',13:'D',14:'E',15:'F',16:'G',17:'H',18:'I',19:'J',20:'K',21:'L',22:'M',23:'N',24:'O',25:'P',26:'Q',27:'R',28:'S',29:'T',30:'U',31:'V',32:'W',33:'X',34:'Y',35:'Z'}
 while True:
+
+    data_aux = []
+    x_ = []
+    y_ = []
 
     ret, frame = cap.read()
 
@@ -25,59 +29,48 @@ while True:
 
     results = hands.process(frame_rgb)
     if results.multi_hand_landmarks:
-        # Initialize data_aux for both hands
-        data_aux_left = []
-        data_aux_right = []
-
         for hand_landmarks in results.multi_hand_landmarks:
             mp_drawing.draw_landmarks(
-                frame,
-                hand_landmarks,
-                mp_hands.HAND_CONNECTIONS,
+                frame,  # image to draw
+                hand_landmarks,  # model output
+                mp_hands.HAND_CONNECTIONS,  # hand connections
                 mp_drawing_styles.get_default_hand_landmarks_style(),
                 mp_drawing_styles.get_default_hand_connections_style())
 
-            # Calculate bounding box coordinates for each hand
-            x_min, y_min = W, H
-            x_max, y_max = 0, 0
-            for landmark in hand_landmarks.landmark:
-                x, y = int(landmark.x * W), int(landmark.y * H)
-                x_min = min(x_min, x)
-                y_min = min(y_min, y)
-                x_max = max(x_max, x)
-                y_max = max(y_max, y)
+        for hand_landmarks in results.multi_hand_landmarks:
+            for i in range(len(hand_landmarks.landmark)):
+                x = hand_landmarks.landmark[i].x
+                y = hand_landmarks.landmark[i].y
 
-            # Extract features from each hand
-            hand_data_aux = []
-            for landmark in hand_landmarks.landmark:
-                # Normalize landmark coordinates relative to the bounding box of the hand
-                x_norm = (landmark.x * W - x_min) / (x_max - x_min)
-                y_norm = (landmark.y * H - y_min) / (y_max - y_min)
-                hand_data_aux.append(x_norm)
-                hand_data_aux.append(y_norm)
+                x_.append(x)
+                y_.append(y)
 
-            # Pad or truncate data_aux to contain 42 features (21 per hand)
-            hand_data_aux += [0] * (42 - len(hand_data_aux))
+            for i in range(len(hand_landmarks.landmark)):
+                x = hand_landmarks.landmark[i].x
+                y = hand_landmarks.landmark[i].y
+                data_aux.append(x - min(x_))
+                data_aux.append(y - min(y_))
 
-            # Append features to the corresponding hand's data_aux list
-            if x_min < W / 2:  # Left hand
-                data_aux_left.extend(hand_data_aux)
-            else:  # Right hand
-                data_aux_right.extend(hand_data_aux)
+        # Pad or truncate data_aux to have exactly 42 features
+        desired_length = 42
+        if len(data_aux) < desired_length:
+            data_aux += [0] * (desired_length - len(data_aux))
+        elif len(data_aux) > desired_length:
+            data_aux = data_aux[:desired_length]
 
-        # Ensure each hand's feature vector has exactly 42 features
-        data_aux_left += [0] * (42 - len(data_aux_left))
-        data_aux_right += [0] * (42 - len(data_aux_right))
+        x1 = int(min(x_) * W) - 10
+        y1 = int(min(y_) * H) - 10
 
-        # Combine features from both hands and pad/truncate to 84 features
-        combined_data_aux = data_aux_left + data_aux_right
-        combined_data_aux += [0] * (84 - len(combined_data_aux))
+        x2 = int(max(x_) * W) - 10
+        y2 = int(max(y_) * H) - 10
 
-        # Display predicted text
-        text_position = (50, 50)
-        prediction = model.predict([np.asarray(combined_data_aux)])
+        prediction = model.predict([np.asarray(data_aux)])
+
         predicted_character = labels_dict[int(prediction[0])]
-        cv2.putText(frame, predicted_character, text_position, cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), 4)
+        cv2.putText(frame, predicted_character, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 0, 0), 3,
+                    cv2.LINE_AA)
 
     cv2.imshow('frame', frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):
